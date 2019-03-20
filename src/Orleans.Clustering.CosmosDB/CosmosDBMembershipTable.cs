@@ -110,13 +110,10 @@ namespace Orleans.Clustering.CosmosDB
         {
             try
             {
-                var spResponse = await this._dbClient.ExecuteStoredProcedureAsync<ReadResponse>(
-                    UriFactory.CreateStoredProcedureUri(this._options.DB, this._options.Collection, READ_ALL_SPROC),
-                    new RequestOptions { PartitionKey = new PartitionKey(this._clusterOptions.ClusterId) },
-                    this._clusterOptions.ClusterId);
+                ReadResponse spResponse = await ReadRecords();
 
-                ClusterVersionEntity versionEntity = spResponse.Response.ClusterVersion;
-                List<SiloEntity> entryEntities = spResponse.Response.Silos;
+                ClusterVersionEntity versionEntity = spResponse.ClusterVersion;
+                List<SiloEntity> entryEntities = spResponse.Silos;
 
                 TableVersion version = null;
                 if (versionEntity != null)
@@ -368,16 +365,9 @@ namespace Orleans.Clustering.CosmosDB
                 await this._dbClient.ReadDatabaseAsync(dbUri);
                 await this._dbClient.DeleteDatabaseAsync(dbUri);
             }
-            catch (DocumentClientException dce)
+            catch (DocumentClientException dce) when (dce.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                if (dce.StatusCode == System.Net.HttpStatusCode.NotFound)
-                {
-                    return;
-                }
-                else
-                {
-                    throw;
-                }
+                return;
             }
         }
 
@@ -409,8 +399,7 @@ namespace Orleans.Clustering.CosmosDB
                 new RequestOptions
                 {
                     PartitionKey = new PartitionKey(PARTITION_KEY),
-                    //TODO: Check the consistency level for the emulator
-                    ConsistencyLevel = this._options.AccountEndpoint.Contains("localhost") ? ConsistencyLevel.Session : ConsistencyLevel.Strong,
+                    ConsistencyLevel = this._options.GetConsistencyLevel(),
                     OfferThroughput = this._options.CollectionThroughput
                 });
         }
@@ -446,16 +435,9 @@ namespace Orleans.Clustering.CosmosDB
                     await this._dbClient.DeleteStoredProcedureAsync(storedProcUri);
                 }
             }
-            catch (DocumentClientException dce)
+            catch (DocumentClientException dce) when (dce.StatusCode == HttpStatusCode.NotFound)
             {
-                if (dce.StatusCode == HttpStatusCode.NotFound)
-                {
-                    insertStoredProc = true;
-                }
-                else
-                {
-                    throw;
-                }
+                insertStoredProc = true;
             }
             catch (Exception exc)
             {
@@ -473,6 +455,37 @@ namespace Orleans.Clustering.CosmosDB
 
                 await this._dbClient.CreateStoredProcedureAsync(UriFactory.CreateDocumentCollectionUri(this._options.DB, this._options.Collection), newStoredProc);
             }
+        }
+
+        public async Task CleanupDefunctSiloEntries(DateTimeOffset beforeDate)
+        {
+            var allSilos = (await this.ReadRecords()).Silos;
+            if (allSilos.Count == 0) return;
+
+            var toDelete = allSilos.Where(s => s.Status == SiloStatus.Dead && s.IAmAliveTime < beforeDate);
+            var tasks = new List<Task>();
+            foreach (var deadSilo in toDelete)
+            {
+                tasks.Add(
+                    this._dbClient.DeleteDocumentAsync(
+                        UriFactory.CreateDocumentUri(
+                            this._options.DB,
+                            this._options.Collection,
+                            deadSilo.Id
+                        )
+                    )
+                );
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task<ReadResponse> ReadRecords()
+        {
+            return (await this._dbClient.ExecuteStoredProcedureAsync<ReadResponse>(
+                UriFactory.CreateStoredProcedureUri(this._options.DB, this._options.Collection, READ_ALL_SPROC),
+                new RequestOptions { PartitionKey = new PartitionKey(this._clusterOptions.ClusterId) },
+                this._clusterOptions.ClusterId)).Response;
         }
     }
 }

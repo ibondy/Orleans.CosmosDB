@@ -1,16 +1,21 @@
+using System;
+using Microsoft.Azure.Documents;
 using Microsoft.Azure.Documents.Client;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Orleans.Runtime;
 using System.Collections.Generic;
+using System.Diagnostics;
+using Orleans.Persistence.CosmosDB.Options;
 
 namespace Orleans.Persistence.CosmosDB
 {
     public class CosmosDBStorageOptions
     {
         private const string ORLEANS_DB = "Orleans";
-        private const string ORLEANS_STORAGE_COLLECTION = "OrleansStorage";
+        internal const string ORLEANS_STORAGE_COLLECTION = "OrleansStorage";
         private const int ORLEANS_STORAGE_COLLECTION_THROUGHPUT = 400;
+
 
         [Redact]
         public string AccountKey { get; set; }
@@ -26,7 +31,16 @@ namespace Orleans.Persistence.CosmosDB
 
         [JsonConverter(typeof(StringEnumConverter))]
         public Protocol ConnectionProtocol { get; set; } = Protocol.Tcp;
-        
+
+        public JsonSerializerSettings JsonSerializerSettings { get; set; }
+
+        public bool UseFullAssemblyNames { get; set; } = true;
+
+        public bool IndentJson { get; set; } = true;
+
+        [JsonConverter(typeof(StringEnumConverter))]
+        public TypeNameHandling TypeNameHandling { get; set; } = TypeNameHandling.All;
+
         /// <summary>
         /// List of JSON path strings.
         /// Each entry on this list represents a property in the State Object that will be included in the document index.
@@ -46,10 +60,14 @@ namespace Orleans.Persistence.CosmosDB
         public bool DropDatabaseOnInit { get; set; }
 
         /// <summary>
-        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialzed prior to use.
+        /// Stage of silo lifecycle where storage should be initialized.  Storage must be initialized prior to use.
         /// </summary>
         public int InitStage { get; set; } = DEFAULT_INIT_STAGE;
+
         public const int DEFAULT_INIT_STAGE = ServiceLifecycleStage.ApplicationServices;
+
+        // TODO: Consistency level for emulator (defaults to Session; https://docs.microsoft.com/en-us/azure/cosmos-db/local-emulator)
+        internal ConsistencyLevel? GetConsistencyLevel() => this.AccountEndpoint.Contains("localhost") ? (ConsistencyLevel?)ConsistencyLevel.Session : null;
     }
 
     /// <summary>
