@@ -1,5 +1,5 @@
-using Microsoft.Azure.Documents;
-using Microsoft.Azure.Documents.Client;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Cosmos.Linq;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Orleans.Clustering.CosmosDB.Models;
@@ -21,7 +21,8 @@ namespace Orleans.Clustering.CosmosDB
         private readonly ILoggerFactory _loggerFactory;
         private readonly TimeSpan _maxStaleness;
         private readonly string _clusterId;
-        private DocumentClient _dbClient;
+        private CosmosClient _cosmos;
+        private Container _container;
 
         public TimeSpan MaxStaleness => this._maxStaleness;
 
@@ -38,32 +39,40 @@ namespace Orleans.Clustering.CosmosDB
 
         public async Task<IList<Uri>> GetGateways()
         {
-            try
-            {
-                var spResponse = await this._dbClient.ExecuteStoredProcedureAsync<List<SiloEntity>>(
-                    UriFactory.CreateStoredProcedureUri(this._options.DB, this._options.Collection, SPROC),
-                    new RequestOptions { PartitionKey = new PartitionKey(this._clusterId) },
-                    this._clusterId);
+            var query = this._container
+                    .GetItemLinqQueryable<SiloEntity>(requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(this._clusterId) })
+                        .Where(g => g.EntityType == nameof(SiloEntity) &&
+                            g.Status == SiloStatus.Active &&
+                            g.ProxyPort.HasValue && g.ProxyPort.Value != 0).ToFeedIterator();
 
-                var uris = spResponse.Response.Select(ConvertToGatewayUri).ToList();
-                return uris;
-            }
-            catch (Exception)
+            var entities = new List<SiloEntity>();
+            do
             {
-                throw;
-            }
+                var items = await query.ReadNextAsync();
+                entities.AddRange(items);
+            } while (query.HasMoreResults);
+
+            var uris = entities.Select(ConvertToGatewayUri).ToList();
+            return uris;
         }
 
-        public async Task InitializeGatewayListProvider()
+        public Task InitializeGatewayListProvider()
         {
-            this._dbClient = new DocumentClient(new Uri(this._options.AccountEndpoint), this._options.AccountKey,
-                    new ConnectionPolicy
-                    {
-                        ConnectionMode = this._options.ConnectionMode,
-                        ConnectionProtocol = this._options.ConnectionProtocol
-                    });
+            if (this._options.Client != null)
+            {
+                this._cosmos = this._options.Client;
+            }
+            else
+            {
+                this._cosmos = new CosmosClient(
+                    this._options.AccountEndpoint,
+                    this._options.AccountKey,
+                    new CosmosClientOptions { ConnectionMode = this._options.ConnectionMode }
+                );
+            }
+            this._container = this._cosmos.GetDatabase(this._options.DB).GetContainer(this._options.Collection);
 
-            await this._dbClient.OpenAsync();
+            return Task.CompletedTask;
         }
 
         private static Uri ConvertToGatewayUri(SiloEntity gateway)

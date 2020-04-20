@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -6,9 +6,9 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <PackageId>Orleans.Persistence.CosmosDB</PackageId>
-    <Title>Microsoft Orleans Persistence provider for Azure CosmosDB</Title>
-    <Description>Microsoft Orleans persistence provider backed by Azure CosmosDB</Description>
+    <PackageId>Orleans.Streaming.CosmosDB</PackageId>
+    <Title>Microsoft Orleans Streaming provider for Azure CosmosDB</Title>
+    <Description>Microsoft Orleans streaming provider backed by Azure CosmosDB Change Feed</Description>
     <Authors>Gutemberg Ribeiro</Authors>
     <Product>Orleans Azure CosmosDB</Product>
     <PackageLicenseUrl>https://github.com/dotnet/Orleans#license</PackageLicenseUrl>
@@ -23,13 +23,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\AssemblyInfo.cs" Link="AssemblyInfo.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.6.0" />
-    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.0.2" />
+    <PackageReference Include="Microsoft.Azure.DocumentDB.Core" Version="2.9.1" />
+    <PackageReference Include="Microsoft.Orleans.OrleansProviders" Version="3.0.2" />
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.3" />
+    <PackageReference Include="Microsoft.Azure.DocumentDB.ChangeFeedProcessor" Version="2.2.8" />
+    <PackageReference Include="Microsoft.Orleans.OrleansRuntime" Version="3.0.2" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator.MSBuild" Version="3.0.2" />
   </ItemGroup>
 
 </Project>

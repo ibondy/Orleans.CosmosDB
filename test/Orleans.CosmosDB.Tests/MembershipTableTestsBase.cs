@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Orleans.Messaging;
 using Orleans.Runtime;
@@ -26,7 +27,7 @@ namespace Orleans.CosmosDB.Tests
     public abstract class MembershipTableTestsBase : IDisposable //, IClassFixture<ConnectionStringFixture>
     {
         private static readonly string hostName = Dns.GetHostName();
-        private readonly ILogger logger;
+        private readonly ILogger logger = null;
         private readonly IMembershipTable membershipTable;
         private readonly IGatewayListProvider gatewayListProvider;
         protected readonly string clusterId;
@@ -45,7 +46,9 @@ namespace Orleans.CosmosDB.Tests
         {
             //this.environment = environment;
             //loggerFactory = TestingUtils.CreateDefaultLoggerFactory($"{this.GetType()}.log", filters);
-            //logger = loggerFactory.CreateLogger(this.GetType().FullName);
+            var sp = new ServiceCollection().AddLogging(b => b.AddConsole()).BuildServiceProvider();
+            loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+            logger = loggerFactory.CreateLogger(this.GetType().FullName);
 
             this.clusterId = "test-" + Guid.NewGuid();
 

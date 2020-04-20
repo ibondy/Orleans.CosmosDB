@@ -1,15 +1,20 @@
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Cosmos.Fluent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Orleans.Clustering.CosmosDB;
 using Orleans.Configuration;
 using Orleans.Messaging;
+using System;
+using System.Collections.ObjectModel;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Xunit;
 
 namespace Orleans.CosmosDB.Tests
 {
     /// <summary>
-    /// Tests for operation of Orleans Membership Table using Azure Cosmos DB 
+    /// Tests for operation of Orleans Membership Table using Azure Cosmos DB
     /// </summary>
     public class MBTTests : MembershipTableTestsBase/*, IClassFixture<AzureStorageBasicTests>*/
     {
@@ -28,15 +33,23 @@ namespace Orleans.CosmosDB.Tests
 
         protected override IMembershipTable CreateMembershipTable(ILogger logger, string accountEndpoint, string accountKey)
         {
+            var httpHandler = new HttpClientHandler()
+            {
+                ServerCertificateCustomValidationCallback = (req, cert, chain, errors) => true
+            };
+
+            var dbClient = new CosmosClient(
+                accountEndpoint,
+                accountKey,
+                new CosmosClientOptions { ConnectionMode = ConnectionMode.Gateway }
+            );
+
             //TestUtils.CheckForAzureStorage();
             var options = new CosmosDBClusteringOptions()
             {
-                AccountEndpoint = accountEndpoint,
-                AccountKey = accountKey,
+                Client = dbClient,
                 CanCreateResources = true,
-                AutoUpdateStoredProcedures = true,
                 DropDatabaseOnInit = true,
-                ConnectionMode = Microsoft.Azure.Documents.Client.ConnectionMode.Gateway,
                 DB = "OrleansMBRTest"
             };
             return new CosmosDBMembershipTable(this.loggerFactory, Options.Create(new ClusterOptions { ClusterId = this.clusterId }), Options.Create(options));
@@ -44,13 +57,23 @@ namespace Orleans.CosmosDB.Tests
 
         protected override IGatewayListProvider CreateGatewayListProvider(ILogger logger, string accountEndpoint, string accountKey)
         {
+            var httpHandler = new HttpClientHandler()
+            {
+                ServerCertificateCustomValidationCallback = (req, cert, chain, errors) => true
+            };
+
+            var dbClient = new CosmosClient(
+                accountEndpoint,
+                accountKey,
+                new CosmosClientOptions { ConnectionMode = ConnectionMode.Gateway }
+            );
+
             var options = new CosmosDBGatewayOptions()
             {
-                AccountEndpoint = accountEndpoint,
-                AccountKey = accountKey,
-                ConnectionMode = Microsoft.Azure.Documents.Client.ConnectionMode.Gateway,
+                Client = dbClient,
                 DB = "OrleansMBRTest"
             };
+
             return new CosmosDBGatewayListProvider(this.loggerFactory,
                 Options.Create(options),
                 Options.Create(new ClusterOptions { ClusterId = this.clusterId }),
@@ -100,7 +123,7 @@ namespace Orleans.CosmosDB.Tests
         }
 
         // TODO: Enable this after implement retry police
-        // See https://blogs.msdn.microsoft.com/bigdatasupport/2015/09/02/dealing-with-requestratetoolarge-errors-in-azure-documentdb-and-testing-performance/ 
+        // See https://blogs.msdn.microsoft.com/bigdatasupport/2015/09/02/dealing-with-requestratetoolarge-errors-in-azure-documentdb-and-testing-performance/
         //[Fact]
         //public async Task UpdateRowInParallel()
         //{
